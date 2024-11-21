@@ -12,28 +12,95 @@ import sys
 
 class Package(threading.Thread):
     def __init__(self, package_id, redist_stations):
-        threading.Thread.__init__(self)
+        super.__init__(self)
         self.package_id = package_id
         order = random.sample(redist_stations, 2)
         self.origin = order[0]
+        origin.to_deliver_packages.append(self)
         self.destination = order[1]
         self.redist_stations = redist_stations
+        self.lock = threading.Semaphore(0)
+
+    def end_delivery(self):
+        self.join()
 
 class Carrier(threading.Thread):
     def __init__(self, carrier_id, redist_stations, capacity):
-        threading.Thread.__init__(self)
+        super.__init__(self)
         self.carrier_id = carrier_id
         self.redist_stations = redist_stations
         self.capacity = capacity
-        self.packages = []
+        self.carried_packages = []
         self.current_station = random.choice(redist_stations)
+        self.lock = threading.Semaphore(0)
+
+    def load_package(self, package):
+        if (self.capacity - len(self.carried_packages)) > 0:
+            self.carried_packages.append(package)
+            package.origin.to_deliver_packages.remove(package)
+            print(f"Carrier {self.carrier_id} loaded package {package.package_id} from station {package.origin.station_id} at time {time.time()}")
+        
+    def unload_package(self, package):
+        delivered_packages = []
+
+        for i in len(self.carried_packages):
+            if self.carried_packages[i].destination == self.current_station:
+                delivered_packages.append(self.carried_packages[i])
+                print(f"Carrier {self.carrier_id} unloaded package {self.carried_packages[i].package_id} on station {self.current_station} at time {time.time()}")
+                removed_package = self.carried_packages.pop(self.carried_packages[i])
+                removed_package.end_delivery()
+                time.sleep(0.5)
+            
+        return delivered_packages
+        
+    def travel(self):
+        next_station_index = (self.redist_stations.index(self.current_station) + 1) % len(self.redist_stations)
+        self.current_station.carriers.remove(self)
+        travel_time = random.uniform(1, 10)
+        print(f"Carrier {self.carrier_id} traveling to station {self.current_station.station_id} for {travel_time} seconds")
+        time.sleep(travel_time)
+        self.current_station = self.redist_stations[next_station_index]
+
+    def run(self):
+
+
+        while sum(station.get_to_deliver_packages_count() for station in self.redist_stations) > 0 or len(self.carried_packages) > 0:
+
+            self.current_station.add_carrier(self)
+
+            if len(self.carried_packages) < self.capacity:
+                for package in self.current_station.to_deliver_packages:
+                    self.load_package(package)
+                    time.sleep(0.5)
+                
+            delivered_packages = self.unload_package(package)
+
+            if len(delivered_packages) > 0:
+                for package in delivered_packages:
+                    self.current_station.received_packages.append(package)
+                    package.end_delivery()
+                
+            travel()
+
+                
+
+
+
 
 class Station(threading.Thread):
     def __init__(self, station_id):
-        threading.Thread.__init__(self)
+        super.__init__(self)
         self.station_id = station_id
-        self.packages = []
+        self.to_deliver_packages = []
+        self.received_packages = []
         self.carriers = []
+
+    def add_carrier(self, carrier):
+        self.carriers.append(carrier)
+
+    def get_to_deliver_packages_count(self):
+        return len(self.to_deliver_packages)
+
 
 if len(sys.argv) != 5:
     print("Usage: python Untitled-1.py <S> <C> <P> <A>")
