@@ -2,6 +2,7 @@ import threading
 import time
 import random
 import sys
+import os
 
 # Coloquei uns nomes que fazem mais ou menos sentido com a abreviação, se quiser mudar fique a vontade
 
@@ -22,7 +23,23 @@ class Package(threading.Thread):
         self.lock = threading.Semaphore(0)
 
     def end_delivery(self):
+        filename = f"log_package{self.package_id}.txt"
+        f = open(filename, "a")
+        f.write(f"Package {self.package_id} was delivered at time {time.time()}\n")
+
         self.join()
+    
+
+    def begin_log(self):
+        filename = f"log_package{self.package_id}.txt"
+        f = open(filename, "w")
+
+        f.write(f"Package {self.package_id} was created at time {time.time()}\n")
+        f.write(f"Package {self.package_id} was sent from station {self.origin.station_id} to station {self.destination.station_id}\n")
+        #conferir isso aqui
+        f.write(f"Package arrived at origin at time {time.time()}\n")
+        f.close()
+
 
 class Carrier(threading.Thread):
     def __init__(self, carrier_id, redist_stations, capacity):
@@ -38,6 +55,10 @@ class Carrier(threading.Thread):
         if (self.capacity - len(self.carried_packages)) > 0:
             self.carried_packages.append(package)
             package.origin.to_deliver_packages.remove(package)
+
+            filename = f"log_package{package.package_id}.txt"
+            f = open(filename, "a")
+            f.write(f"Package {package.package_id} was loaded by carrier {self.carrier_id} at time {time.time()}\n")
             print(f"Carrier {self.carrier_id} loaded package {package.package_id} from station {package.origin.station_id} at time {time.time()}")
         
     def unload_package(self, package):
@@ -63,24 +84,13 @@ class Carrier(threading.Thread):
 
     def run(self):
 
-
         while sum(station.get_to_deliver_packages_count() for station in self.redist_stations) > 0 or len(self.carried_packages) > 0:
 
+            self.lock.acquire()
             self.current_station.add_carrier(self)
-
-            if len(self.carried_packages) < self.capacity:
-                for package in self.current_station.to_deliver_packages:
-                    self.load_package(package)
-                    time.sleep(0.5)
+            self.lock.release()
                 
-            delivered_packages = self.unload_package(package)
-
-            if len(delivered_packages) > 0:
-                for package in delivered_packages:
-                    self.current_station.received_packages.append(package)
-                    package.end_delivery()
-                
-            travel()
+            self.travel()
 
                 
 
@@ -100,6 +110,24 @@ class Station(threading.Thread):
 
     def get_to_deliver_packages_count(self):
         return len(self.to_deliver_packages)
+
+    def run(self): 
+        while len(self.to_deliver_packages) > 0:
+
+            for i in range(self.carriers):
+
+                if len(self.carriers[i].carried_packages) < self.carriers[i].capacity:
+                    for package in self.to_deliver_packages:
+                        self.carriers[i].load_package(package)
+                        time.sleep(0.5)
+
+                self.carriers[i].delivered_packages = self.carriers[i].unload_package(package)
+
+                if len(self.carriers[i].delivered_packages) > 0:
+                    for package in self.carriers[i].delivered_packages:
+                        self.received_packages.append(package)
+                        package.end_delivery()
+
 
 
 if len(sys.argv) != 5:
