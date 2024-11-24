@@ -11,6 +11,21 @@ import os
 # P = nº de Packages
 # A = Carrier.capacity (amount ficaria esquisitasso e nem faria sentido)
 
+if len(sys.argv) != 5:
+    print("Usage: python Untitled-1.py <S> <C> <P> <A>")
+    exit()
+
+S = int(sys.argv[1])
+C = int(sys.argv[2])
+P = int(sys.argv[3])
+A = int(sys.argv[4])
+
+if P <= A or P <= C or A <= C:
+    print("Insufficient packages to distribute")
+    exit()
+
+
+
 class Package(threading.Thread):
     def __init__(self, package_id, redist_stations):
         super().__init__()
@@ -72,38 +87,43 @@ class Carrier(threading.Thread):
 
     def unload_packages(self):
         delivered_packages = []
-        filename = f"log_package{removed_package.package_id}.txt"
-        f = open(filename, "a")
 
-        for i in len(self.carried_packages):
+        for i in range(len((self.carried_packages))):
             if self.carried_packages[i].destination.station_id == self.current_station.station_id:
                 delivered_packages.append(self.carried_packages[i])
-                removed_package = self.carried_packages.pop(self.carried_packages[i]) 
-                                
+                removed_package = self.carried_packages[i]
+                #abre o log do pacote
+                filename = f"log_package{removed_package.package_id}.txt"
+                f = open(filename, "a") 
+
                 time_unload = random.uniform(0.1, 0.5)
                 time.sleep(time_unload)
                 print(f"Carrier {self.carrier_id} unloaded package {self.carried_packages[i].package_id} on station {self.current_station.station_id} at time {time.time()}")
                 f.write(f"Package {removed_package.package_id} was unloaded by carrier {self.carrier_id} on station {self.current_station.station_id} at time {time.time()}\n")
-
+                f.close()
                 removed_package.end_delivery()
                 removed_package.join()
-                
 
-        f.close()
+        self.carried_packages = list(set(self.carried_packages) - set(delivered_packages))  
         return delivered_packages
         
     def travel(self):
         next_station_index = (self.redist_stations.index(self.current_station) + 1) % len(self.redist_stations)
-        self.current_station.carriers.remove(self)
+
         travel_time = random.uniform(1, 4)
         print(f"Carrier {self.carrier_id} traveling to station {self.current_station.station_id} for {travel_time} seconds")
         time.sleep(travel_time)
         self.current_station = self.redist_stations[next_station_index]
 
     def run(self):
+        print(f"carrier {self.carrier_id} running from station {self.current_station.station_id}")
 
-        while sum(station.get_to_deliver_packages_count() for station in self.redist_stations) > 0 or len(self.carried_packages) > 0:
+        self.current_station.add_carrier(self)
+        self.current_station.lock.release()
+        self.lock.acquire()  
+        self.travel()
 
+        while (sum(station.get_to_deliver_packages_count() for station in self.redist_stations) > 0) or (len(self.carried_packages) > 0):
             self.current_station.add_carrier(self)
 
             self.current_station.lock.release()
@@ -138,7 +158,9 @@ class Station(threading.Thread):
         filename = f"log_station{self.station_id}.txt"
         f = open(filename, "w")
 
-        f.write(f"Station {self.station_id}  \n\tTo deliver packages: {self.to_deliver_packages}")
+        f.write(f"Station {self.station_id}  \n")
+        for package in self.to_deliver_packages:
+            f.write(f"Package {package.package_id} to be delivered\n")
 
         f.close()
 
@@ -146,8 +168,9 @@ class Station(threading.Thread):
         filename = f"log_station{self.station_id}.txt"
         f = open(filename, "a")
 
-        f.write(f"Station {self.station_id}  \n\treceived packages: {self.received_packages}")
-
+        f.write(f"\nStation {self.station_id}  \n")
+        for package in self.received_packages:
+            f.write(f"Package {package.package_id} received\n")
         f.close()
 
     def process_packages(self, carrier):
@@ -164,31 +187,22 @@ class Station(threading.Thread):
 
                 
     def run(self): 
+        self.begin_log()
         self.lock.acquire()
 
         while self.keep_running:
-            
             carrier = self.carriers.pop(0)
             self.process_packages(carrier)
 
             carrier.lock.release()
             self.lock.acquire()
 
+        self.end_log()
+
+
 def main():
 
-    if len(sys.argv) != 5:
-        print("Usage: python Untitled-1.py <S> <C> <P> <A>")
-        exit()
-
-    S = int(sys.argv[1])
-    C = int(sys.argv[2])
-    P = int(sys.argv[3])
-    A = int(sys.argv[4])
-
-    if P <= A or P <= C or A <= C:
-        print("Insufficient packages to distribute")
-        exit()
-
+    print(f"Running with {S} stations, {C} carriers, {P} packages and {A} carrier capacity")
     stations = []
     carriers = []
     packages = []
@@ -219,3 +233,6 @@ def main():
         station.keep_running = False
         station.lock.release()
         station.join()
+
+if __name__ == "__main__":
+    main()
