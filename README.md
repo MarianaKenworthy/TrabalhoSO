@@ -14,3 +14,6 @@ Escolhemos dar nomes semanticos às variaveis S, C, P e A: Station, Carrier, Pac
 Implementados nas funções de cada classe quando necessário estão semáforos que impedem que mais de uma carrier entre ao mesmo tempo numa estação e garantem que somente uma carrier seja carregada por vez. Há também um semáforo para manejar o log dos pacotes. 
 
 Ao rodar o programa, são gerados logs que permitem acompanhar os eventos de cada pacote e em cada estação.
+
+## Contribuidores
+Este projeto foi feito por André Castilho e Mariana Kenworthy para a disciplina de Sistemas Operacionais I.
