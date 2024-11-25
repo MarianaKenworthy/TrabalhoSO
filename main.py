@@ -147,12 +147,6 @@ class Carrier(threading.Thread):
         # Imprime na tela a estação de origem do carrier
         print(f"carrier {self.carrier_id} running from station {self.current_station.station_id}")
 
-        # Primeiro processamento de carrier em uma estação
-        self.current_station.add_carrier(self)
-        self.current_station.lock.release()
-        self.lock.acquire()  
-        self.travel()
-
         # Loop para processar os pacotes, enquanto houver pacotes a serem entregues ou pacotes carregados por essa carrier
         while (sum(station.get_to_deliver_packages_count() for station in self.redist_stations) > 0) or (len(self.carried_packages) > 0):
             # Se adiciona na estação
@@ -232,8 +226,7 @@ class Station(threading.Thread):
 
                 
     def run(self): 
-        # Inicia o log da estação
-        self.begin_log()
+        
         # Trava a estação esperando a chegada de um carrier
         self.lock.acquire()
 
@@ -270,18 +263,23 @@ def main():
         stations.append(station)
         station.start()
     
-    # Inicialização dos carriers
-    for i in range(C):
-        carrier = Carrier(i, stations, A)
-        carriers.append(carrier)
-        carrier.start()
-    
     # Inicialização dos pacotes
     for i in range(P):
         package = Package(i, stations)
         packages.append(package)
         package.start()
 
+    # Inicialização dos logs das estações
+    for i in range(S):
+        stations[i].begin_log()
+
+    # Inicialização dos carriers
+    for i in range(C):
+        carrier = Carrier(i, stations, A)
+        carriers.append(carrier)
+        carrier.start()
+    
+    
     # Aguarda o fim da execução de todas as threads de carriers
     for carrier in carriers:
         carrier.join()
